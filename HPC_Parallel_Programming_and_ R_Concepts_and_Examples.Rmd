@@ -1,22 +1,171 @@
 ---
 title: "High Performance and Parallel Computing and R: Concepts and Examples"
 author: 
-  - name: Jeremiah J. Nieves
-    url:
-output: html_notebook
+  - Jeremiah J. Nieves
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 2
+    number_sections: true
 ---
-<!-- Note: For formatting, this Notebook requires the distill package, bookdown, and  -->
-# Introduction {.tabset}
+<!-- Note: For formatting, this Notebook requires the bookdown package  -->
+
+<!--  Set scrollable code and preview blocks and limit the code window size  -->
+```{css, include = FALSE, echo = FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+}
+```
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r, setup, include = FALSE}
+options(prompt = 'R> ', continue = '+ ', width = 80)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+
+require(raster)
+require(randomForest)
+require(ggplot2)
+require(ggspatial)
+require(viridis)
+```
+
+# Introduction
+
+---
+
+Last updated: 2021-10-01
+
+## Purpose of the Text
+This text is meant to be a example-based primer for utilising R scripts within a High Performance Computing (HPC) environment in both "serial", i.e. one at a time, and "parallel", many at a time, computing tasks. While I focus here on the Barkla HPC at the University of Liverpool, a lot of the concepts and techniques are transferable to other Linux-based HPC ecosystems with a Slurm-based task manager. These examples and guidance are based upon my experiences using the IRIDIS 4 and IRIDIS 5 HPC systems at the University of Southampton; the SUMMIT HPC system at the University of Colorado, Boulder; and the Barkla HPC system at the University of Liverpool. I further focus on processing tasks that are CPU driven and do not address GPU driven processing, which is also possible on all of these, and most, HPC systems.
+
+This text is not meant to be a substitute for reading the user manual and guidance literature provided by the maintainers of the HPC system you are using! It is rather meant to be complementary, providing a more step by step exemplification and explanation of some of the more core types of operations and tasks that you might encounter while processing within an HPC system. The user manuals and guidance literature tend to have broader examples of some more specialised operations and scenarios as well as be more programming language agnostic; this text focuses only on using the R statistical programming language. While this broader overview is invaluable, its purpose does not allow for more in-depth examples and explanations that are contained here.
+
+This text assumes that you have an intermediate knowledge of the R statistical programming language, access permissions to your relevant HPC system, and that HPC system is Linux-based and uses Slurm as its job scheduling manager. You also need to have an SSH client installed and either a direct ethernet cable into your university/HPC network, or have a VPN connection to your university/HPC network. Here, we utilise [MobaXterm](https://mobaxterm.mobatek.net/) as our GUI-based SSH client for ease of use, but technically you an utilise command line/ terminal SSH commands as well.
+
+Additionally, this text assumes you have a working knowledge of the Bash programming language and its use within GNU/Linux. You can find a brief overview of Linux at [opensource.com](https://opensource.com/resources/linux), a list of common Linux commands can be found at [beginnerlinuxtutorial.com](http://beginnerlinuxtutorial.com/basic-linux-commands/linux-basic-commands-tutorial/), and there is an excellent set of tutorials for Linux provided by the [University of Surrey](http://www.ee.surrey.ac.uk/Teaching/Unix/). Additionally, there is a short [Youtube video](https://www.youtube.com/watch?v=IVquJh3DXUA) introducing common Linux commands in a dynamic fashion.
+
+Before we go further, I need to acknowledge the folks who made this text possible in some form or fashion. I'd like to thank Maksym Bondarenko for selflessly teaching me how to use an HPC and parallel program during our time at the University of Southampton. I also want to thank Cliff Addison and Manhui Wang, of the University of Liverpool Advanced Research Computing Team, for our exchanges in understanding the small but sometimes significant differences between HPC systems and helping me get set up quickly at the University of Liverpool.
+
+Finally, this text is constructed using R 3.6.3 and consulting the Barkla manual last updated in July 2021, which was the most up to date version at the time of writing in October 2021.
+
+## Example Data Used
+For any examples using data as an input, we will be using the built-in `esoph` dataset. This dataset captures the occurrence of esophageal cancer along with corresponding age groups, alcohol consumption, and tobacco consumption via smoking. Other data used for examples will be minimal and defined within the code blocks.
+
+## Structure of the Text
+The remainder of the text is structured as follows: [Section 2](#Parallel-Computing-Introduction-and-Background) introduces the basic ideas of parallel programming as well as some common parallel programming workflows or "architectures". Templates and simple examples are provided and will be built upon in later sections. [Section 3](#HPC-Systems-and-Set-Up) introduces HPC systems in general, when they may be useful, their infrastructure, how to interface with them, and specific details of the Barkla HPC. I go further and discuss how to set up you HPC environment, install R packages locally, details of job submission and job parameters, and how to make sure the HPC team gets credit in your works. [Section 4](#Examples-of-Common-Jobs-on-an-HPC-in-R) gives example R scripts, both serial and parallel computing, that might be used in an HPC for specific scenarios. [Section 5](#Creating-Basic-HPC-Job-Submission-Scripts) gives examples of simpler HPC job submission scripts, written in Bash, for corresponding R scripts from [Section 4](#Examples-of-Common-Jobs-on-an-HPC-in-R). [Section 6](#More-Advanced-HPC-Job-Submission-Scripts) builds upon this by giving examples of more advanced HPC job submission scripts for corresponding R scripts from [Section 4](#Examples-of-Common-Jobs-on-an-HPC-in-R), including how to submit multiple tasks or multiple jobs at once. Lastly, [Section 7](#Other-Possibilities-and-Further-Learning) breifly talks about some other possibilities that we do not cover that are even more advanced or rely on additional modules or more advanced computing workflows.
+
+# Parallel Computing Introduction and Background
+
+---
+
+# HPC Systems and Set Up
+
+---
+
+## When is a High Performance Computing (HPC) Resource Useful?
+HPCs, in general, are a network of *nodes* where every node consists of one or more CPUs that have multiple *cores*, higher than usual amounts of Random Access Memory (RAM), i.e. temporary memory, and or other hardware advantages (FIGURE). Cores can be thought of as a computational "worker" that can do a single task at a time. While the CPUs are typically around the speed of commercial grade CPUs that you may find in a *local machine*. A local machine or local computer consists of a single CPU, a set of RAM, a GPU, and local harddrives. A local machine is one that is physically located on your desk or in your office that you tend to interface with directly, i.e. via a keyboard plugged into the computer that is co-located with you. An HPC is typically kept in a dedicated computing room, often very well climate controlled to keep the more powerful equipment cool, and is interacted with remotely over an internet connection. This remote connection is done via a local machine where you transfer data, code, and scripts and send job submission commands to the HPC over the connection.
+
+FIGURE OF GENERAL HPC CONFIGURATION
+
+HPC systems can be useful in a variety of circumstances, including:
+
+- You need or want more computational resources than your local computer can provide, e.g. more RAM, more CPU cores, or more capable GPUs
+- The same program needs to be run many times, usually with different inputs
+- You want to run many processing jobs at once, likely in parallel
+- You want to run some processing without locking up your local machine
+
+So, if HPCs are so powerful and useful, then why don't we always use them? Well, programming a script that can do a one time job or even carry out a parallel job, is a bit more straightforward on a local machine. You can just run the script via RStudio or another Integrated Development Environment (IDE) and have the benefit of being able to utilise the IDE facilities and interactive environment. The benefits of an HPC are unlocked by organising your script slightly differently and making a Bash job script to instruct the HPC in how to run the *executable script*, e.g. an R script. While this sounds daunting, it is less of a demand than it might initially seem.
+
+## Overview of the Barkla HPC System
+TODO CITE THE BARKLA MANUAL HERE FOR PARAPHRASING
+The majority of this text will give examples that work within the Barkla HPC system, but there may be small differences in command and syntax between HPC systems that are Linux-based and utilise Slurm for job scheduling depending on environment options set as well as versions of Linux and Slurm. At the time of writing, Barkla utilises Alces Flight Direct r2017.2 which is based on CentOS Linux 7.9.2009 operating system. It also was using Slurm 20.11.08.
+
+As stated, an HPC consists of networked nodes, and therefore computing resources. The connections between the nodes is optimised for fast communication between the nodes and for writing onto a large disk storage (essentially a large "hard drive" for the HPC) that is shared across all the nodes. All of this is resource communication and coordination is typically managed behind the scenes. So, you typically only have to write your scripts near to normal and then interact with the job scheduler, which for Barkla is Slurm. 
+
+Barkla is comprised of 143 nodes total, including:
+
+- 138 *compute nodes*
+- 2 *large memory nodes*
+- 4 Xeon Phi *accelerator nodes*
+- 5 *GPU nodes*
+- 2 *visualisation nodes*
+- 2 *login nodes*
+
+Each compute node consists of 40 cores (from 2 CPUs) and 384 GB of RAM (9.6 GB/core). The large memory nodes have 40 cores as well, but 1TB of RAM for larger memory intensive jobs. Each GPU node have four Nvidia NVLink P100/V100 GPUs. I'll be honest, I have no idea what the accelerator nodes do for certain, but they seem to have something to do with GPU computations, which we are not focusing on in this text. The names of the types of nodes will depend on the specific system, e.g. IRIDIS referred to their large memory nodes as their "fat nodes", but generally these are the common types of nodes present on most HPC systems.
+
+The visualisation and the login nodes are actually not for computation and running jobs. They are the "front door" to the HPC and are where you login, upload data and scripts, and submit jobs. Logging in is done via Secure SHell (SSH) protocol through the internet either through the direct connection via Ethernet or the established VPN. The login nodes only have two cores and 32GB of RAM, whereas each visualisation node have 40 cores and 380GB of RAM. Therefore, any large data transferring or compilation is advised to happen via the visualisation nodes. Any size data transfer tends to happen faster via the visualisation nodes. Again, different systems may call certain nodes different things, e.g. some "visualisation nodes" are referred to as "data transfer nodes". On login nodes, you can edit scripts and submit jobs and a few other lighter tasks. Interactive and _lightweight_ debugging can be done on the visualisation nodes in addition to large data transfer (either from local to HPC or vice versa).
+
+The names of the two Barkla login nodes are: `barkla4.liv.ac.uk` and `barkla5.liv.ac.uk`.
+
+The names of the two Barkla visualisation nodes are: `barkla6.liv.ac.uk` and `barkla7.liv.ac.uk`.
+
+When connecting via SSH to the HPC over your secured (e.g. VPN or internal network Ethernet) connection, you will need to use your University user ID and password to gain access. Note, most universities require your user ID to have been granted HPC permissions usually via another application form. So, make sure to do this prior to any login attempt. For Barkla, you can make an application at the University's [Advanced Research Computing](https://www.liverpool.ac.uk/csd/advanced-research-computing/access/) webpage. Once you are logged in, you should see something like this (FIGURE OF SPLASH PAGE). 
+
+For more details, see the Barkla user manual.
+
+## Logging In
+For a video of how to log in to Barkla using MobaXterm, which is generally the same procedure for any HPC [see this video](https://stream.liv.ac.uk/cpdedcxw).
+
+## Directories and Default Environment
+### Disk space and its divisions
+###  Uploading data
+For a video of how to upload data to Barkla using MobaXterm, which is generally the same procedure for any HPC, [see this video](TODO MAKE THE VIDEO).
+
+## Modules
+### Installing R packages locally
+## Jobs, Tasks, and Job Scheduling
+### Job limits
+## Partitions
+## Acknowledging the HPC Team!
+
+# Examples of Common Jobs on an HPC in R
+
+---
+
+# Creating Basic HPC Job Submission Scripts
+
+---
+
+## Single Job
 
 
+# More Advanced HPC Job Submission Scripts
 
+---
+
+## Array Jobs
+### One job, many parallel tasks with R managing
+### Many jobs, single tasks with MPI managing
+
+# Other Possibilities and Further Learning
+
+# References
+
+---
 
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
-```{r}
+```{r eval = FALSE}
 plot(cars)
 ```
 
@@ -25,7 +174,7 @@ Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by press
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
 
 The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
-```{r}
+```{r eval = FALSE}
 ##  https://github.com/worldpopglobal/wpUtilities/blob/master/R/wpTimeDiff.R
 ##  Function for calculating diferences in elapsed time and formatting it:
 wpTimeDiff <- function(start, end, frm="hms") {
