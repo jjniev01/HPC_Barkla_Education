@@ -1,0 +1,191 @@
+---
+title: "High Performance and Parallel Computing and R: Concepts and Examples"
+author: 
+  - name: Jeremiah J. Nieves
+    url:
+output: html_notebook
+---
+<!-- Note: For formatting, this Notebook requires the distill package, bookdown, and  -->
+# Introduction {.tabset}
+
+
+
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+##  https://github.com/worldpopglobal/wpUtilities/blob/master/R/wpTimeDiff.R
+##  Function for calculating diferences in elapsed time and formatting it:
+wpTimeDiff <- function(start, end, frm="hms") {
+  dsec <- as.numeric(difftime(end, start, units = c("secs")))
+  hours <- floor(dsec / 3600)
+  
+  if (frm == "hms" ) {
+    minutes <- floor((dsec - 3600 * hours) / 60)
+    seconds <- dsec - 3600*hours - 60*minutes
+    
+    out = paste0(
+      sapply(c(hours, minutes, seconds), function(x) {
+        formatC(x, width = 2, format = "d", flag = "0")
+      }), collapse = ":")
+    
+    return(out)
+  }else{
+    return(hours)
+  }
+}
+
+
+##  Function for creating a progress bar:
+##  https://github.com/worldpopglobal/wpUtilities/blob/master/R/wpProgressMessage.R
+wpProgressMessage <- function(x, 
+                              max = 100,
+                              label=NULL) {
+  
+  if (is.null(label)) label = ''
+  if (x != max) ar = '>' else ar = ''
+  
+  percent <- x / max * 100
+  cat(sprintf('\r[%-50s] %d%% %s',
+              paste(paste(rep('=', percent / 2), collapse = ''),'',sep = ar),
+              floor(percent),
+              label))
+  if (x == max)
+    cat('\n')
+}
+
+
+##  TASK FARM EXAMPLE 1:   ------------------------------------------------------
+##  This task farm is set up where the task farm, i.e. all cores, is passed a 
+##  series of different text values that depends on what the task index is 
+##  attached to the job submission on the HPC. The overall goal was to carry out a 
+##  series of simulations (defined by the separately defined and sourced 
+##  simulate_coarser_units_PARALLEL function) using the random seeds as the 
+##  variable parameter and 
+seed_list_master <- list(1244621,16542,343433,23574,23463,
+                         44930,2345335,789211,1123,15550,
+                         66503,78328,86937,16522,35699,
+                         72550,765,11240,37511,99567,
+                         2347,76866,69844,7684,3345,
+                         
+                         88795,86732,12559,7693,6589,
+                         65318, 9937,7646,881366,2388,
+                         86443,76445,19873,29875,634529,
+                         76329,48194,7459,357661,88353,
+                         6583,339875,856334,24623,19640122,
+                         
+                         853201,83535,74594,112994,322223,
+                         274,85375,9189,8832,85732,
+                         88233,75559,738412,28334,89553,
+                         90045,23228,26535,876409,345992,
+                         255,46677,749322,86355,27532,
+                         
+                         5567,344465,85766,264891,183332,
+                         8602,34855,86323,869345,12332,
+                         86304,6623,8604,28563,68921,
+                         873452,2863,96782,28953,76514,
+                         849664,46658,55671,89934,907902)
+
+##  Subset the seeds for this job:
+seed_list <- seed_list_master[seed_indices]
+
+##  Task farm function:
+cluster_simulate_aggregate_units <- function(seed_list, 
+                                             ...) {
+  ##	Start the timer:
+  tStart <- Sys.time()
+  
+  ##	Pull the cluster:
+  cl <- makeSOCKcluster(cluster_workers)
+  on.exit( stopCluster(cl) )
+  
+  ##	Determine the number of cores we're working with:
+  nodes <- length(cl)
+  
+  ##	Pass off required libraries and data to the cluster workers:
+  clusterEvalQ(cl, {
+    require(sf)
+    require(spdep)
+    require(dplyr)
+    require(data.table)
+    require(snow)
+    require(log4r)
+  })
+  ##  Pass off the required data and functions to the nodes in the cluster
+  ##   - this includes the lists used for informing predictions, and the
+  ##     task functions that create the predictions/info for each subnational 
+  ##     unit:
+  clusterExport(cl, 
+                c("target_units",
+                  "output_directory", 
+                  "temporary_directory",
+                  "output_tag",
+                  "output_name_pattern",
+                  "input_polygon_path",
+                  "id_field_name",
+                  "pop_field_name",
+                  "pop_density_field_name",
+                  "probability_scale_factor",
+                  "area_field_name",
+                  "seed_list",
+                  "seed_skip",
+                  "previous_target_units",
+                  "simulate_coarser_units_PARALLEL",
+                  "overwrite"))
+  
+  ##	Start all nodes on a prediction:
+  for (i in 1:nodes) {
+    ##  Send the  function call to the ith node with ith task from
+    ##  the prediction_list as an argument and tag it with the value i
+    sendCall(cl[[i]], simulate_coarser_units_PARALLEL, i, tag = i)
+  }
+  
+  
+  ##	Create our primary cluster processing loop, recalling that we already
+  ##		have clusters running:
+  cat("Total tasks to process: ", length(seed_list), "\n")
+  for (i in 1:length(seed_list)) {
+    ##	Receive results from a node:
+    predictions <- recvOneData(cl)
+    
+    ##	Check if there was an error:
+    if (!predictions$value$success) {
+      stop("ERROR: Cluster barfed...\n\n", predictions)
+    }
+    
+    ##	Which block are we processing:
+    block <- predictions$value$tag
+    # cat("Received gid: ", block, "\n")
+    # flush.console()
+    
+    ##	Check to see if we are at the end of our tasklist:
+    ni <- nodes + i
+    if (ni <= length(seed_list)) {
+      ##	And if not, send it to the cluster node that just gave us
+      ##		our last result...
+      sendCall(cl[[predictions$node]], 
+               simulate_coarser_units_PARALLEL,
+               ni,
+               tag = ni)
+    }
+    tEnd <- Sys.time()
+    wpProgressMessage(i,
+                      max = length(seed_list),
+                      label = paste0("Received simulation ", ni,
+                                     " Processing Time: ",
+                                     wpTimeDiff(tStart, tEnd)))
+  }
+}
+```
