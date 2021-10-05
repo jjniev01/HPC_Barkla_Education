@@ -118,18 +118,103 @@ The names of the two Barkla visualisation nodes are: `barkla6.liv.ac.uk` and `ba
 
 When connecting via SSH to the HPC over your secured (e.g. VPN or internal network Ethernet) connection, you will need to use your University user ID and password to gain access. Note, most universities require your user ID to have been granted HPC permissions usually via another application form. So, make sure to do this prior to any login attempt. For Barkla, you can make an application at the University's [Advanced Research Computing](https://www.liverpool.ac.uk/csd/advanced-research-computing/access/) webpage. Once you are logged in, you should see something like this (FIGURE OF SPLASH PAGE). 
 
-For more details, see the Barkla user manual.
+knitr::include_graphics("../Figures/BARKLA_Splash_Page.png")
+
+For more details, see the Barkla (or relevant HPC) user manual.
 
 ## Logging In
-For a video of how to log in to Barkla using MobaXterm, which is generally the same procedure for any HPC [see this video](https://stream.liv.ac.uk/cpdedcxw).
+For a video of how to log in to Barkla using MobaXterm, which is generally the same procedure for any HPC [see this video](https://stream.liv.ac.uk/cpdedcxw). In general though, you will require the following to log into Barkla or any University-based HPC:
 
-## Directories and Default Environment
-### Disk space and its divisions
-###  Uploading data
+- User permissions to utilise the HPC services (for Barkla see [here](https://www.liverpool.ac.uk/csd/advanced-research-computing/access/)
+- A secure connection to the University network (either via a VPN or a direct Ethernet connection)
+- Your computing user id, e.g. 'John A. Smith' might have the username 'jasmit01'
+- Your computing password
+
+## Disk Space, Directories, and Data Uploading
+
+Every HPC envrionemt will be a bit different, but will typically have several default storage partitions, or top-level directories that have different purposes and attributes. On Barkla, there are four top-level directories:
+
+- The *home* directory
+- The *volatile* directory
+- The *scratch* directory
+- The *temporary* directory
+
+You can carry out work on any one of these directories, but their attributes, types of works, and limits differ. 
+
+Your *home* directory (`/mnt/home/users/<user_name>/`) is what the navigation pane, on the left side of the MobaXterm window) defaults to showing (FIGUREXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX). The *home* directory has a limit of 100,000 files or 50GB of storage, whichever occurs first. However, the *home* directory has the benefit of being backed up, hence the size limits per user. Yet, the purpose of the *home* directory is not intended to be used as the primary HPC work area, whether being the origin of jobs or the output target of jobs. Rather, the *home* directory should be used to store smaller, important, and hard to recreate scripts and job submission files as opposed to data files. Other, standard backup practices should be in place for data and utilising code repositories such as Github are recommended. To determine what your *home* directory storage quota is and how much of your quota has been used, you can utilise the `quota -s`command within the Barkla terminal pane (black right-hand side of the MobaXterm window).
+
+Your *volatile* directory (`/mnt/data1/users/<user_name>/`) is a _shared_ file system (Network File System (NFS) protocol), meaning that it is visible/accessible from all nodes (including login nodes, visualisation nodes, and compute nodes) on the HPC (not that it is shared amongst many users). It is accessible for both job submission as well as being the target of job outputs. As implied by the name, the *volatile* directory is not backed up, so job input data, job outputs, job executable scripts, and job submission scripts should have copies stored elsewhere. There is no quota for this directory, but there is an inherent physical memory limit to directory. As such, users are asked to be courteous and remove unused files as you go in order to allow all users to carry out work.
+
+Your *scrath* directory (`/mnt/lustre/users/<user_name>/`) is also a _shared_ file system (Lustre protocol), similar to the *volatile* directory. The different file system protocol of this directory is particualrly relevant for applications that support and or utilise parallel IO (read/write) operations. Additionally, the *scrath* directory is a suitable target location for large job output files, which the Barkla user guide defines as over several hundred MB or larger.
+
+Your *temporary* directory (`/tmp/users/<user_name>/`) is _not_ a shared file system and is, actually, specific, i.e. local, to each node. It has fast read/write speeds and is created and assigned to each node that job is assigned to. All files in the *temporary* directory are deleted automatically after 30 days from their creation.
+
+###  Uploading data and scripts
 For a video of how to upload data to Barkla using MobaXterm, which is generally the same procedure for any HPC, [see this video](TODO MAKE THE VIDEO).
 
-## Modules
+## Modules and the Environment
+
+On Barkla, and when logging in, you will be given a base environment that is standard across all users. The environment refers to what software is installed and loaded under the user by default, without loading any others. Every user's environment is independent of all other HPC users envrionment. Additionally, the environment, and thus all loaded software, will revert back to the default upon every logout/login. This is a pretty standard set up as far as HPC systems go
+
+That said, there is a wealth of software (hundreds) already available on with the Barkla system. These software are referred to as "*modules*". Barkla has four classes of modules: applications (`apps`), compilers (`compilers`), libraries(`libs`), and Message Passing Interface (MPI) related (`mpi`). Again, given that the focus of this guid is for geospatial applications using \proglang{R}, we will eventually focus on those.
+
+The following commands can be typed in the MobaXterm terminal to do the following:
+
+- `module list`: shows the currently loaded modules in your environment
+- `module avail`: shows the entire list of all loadable modules available in Barkla
+- `module show <module_name>`: shows information about a specific module provided in the <module_name> argument
+- `module load <module_name>`: loads the specific module provided in the <module_name> argument
+- `moduel unload <module_name>`: unloads the specific module provided in the <module_name> argument
+- `module purge`: unloads all modules that are currently loaded
+
+It is worth noting, that when you call `module avail` you will see that there are many different versions of software available and it will be important that you load the most appropriate one for your application.
+
+For instance, at the time of writing, there are three versions of \proglang{R} applications on Barkla, but two options for one version.
+
+```{bash, eval = FALSE}
+apps/R/3.4.0/gcc-5.5.0+lapack-3.5.0+blas-3.6.0
+apps/R/3.5.0/gcc-5.5.0+lapack-3.5.0+blas-3.6.0
+apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0 *default*
+apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0+x11
+```
+
+
+You will also notice that there are other details after the final `/` in each module name. This indicates other modules, which \proglang{R} is dependent upon, that are loaded a module is loaded. For instance, calling `module load apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0` will load \proglang{R} version 3.6.3 along with the modules `gcc-5.5.0`, `lapack-3.5.0`, and `blas-3.6.0`. These modules that are dependencies are typically libraries, with the previous example showing up under `module avail` as `libs/gcc/5.5.0`, `libs/lapack/3.5.0/gcc-5.5.0`, `libs/blas/3.6.0/gcc-5.5.0`, respectively. This means that the single line `module load apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0` is equivalent to calling:
+
+
+```{bash, eval = FALSE}
+module load libs/lapack/3.5.0/gcc-5.5.0
+module load libs/lapack/3.5.0/gcc-5.5.0
+module load libs/blas/3.6.0/gcc-5.5.0
+module load apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0
+```
+
+However, if you were to run the above, you would receive a message in the terminal, following the last line, that `gcc-5.5.0`, `lapack-3.5.0`, `blas-3.6.0` were already loaded. It's not an error, but indicates that calling them all individually was unnecessary.
+
+If there are modules that are not already on Barkla, you can contact the [Advanced Research Computing (ARC) team](hpc-support@liverpool.ac.uk) to see if they would be able to be installed and made available.
+
+### Basic necessary modules for geocomputation in R
+
+For basic geoprocessing in R, using common geospatial packages, will require other modules to be loaded. The common geospatial packages of \pkg{sf}, \pkg{rgdal},\pkg{spdep}, and others all require the \proglang{GDAL}, \proglang{GEOS}, and \proglang{PROJ} libraries in order to operate. Because these \proglang{R} packages are _dependent_ upon these libraries, these libraries must be loaded **before** the R module is loaded. Module load order is important!
+
+Typically, the minimum modules that must be loaded prior to \proglang{R} being loaded or used would look like the following:
+
+```{bash, eval = FALSE}
+module load libs/proj/8.0.0/gcc-5.5.0+sqlite-3.35.4
+module load libs/gdal/3.2.2/gcc-5.5.0+proj-8.0.0
+module load libs/geos/3.8.1/gcc-5.5.0
+module load apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0
+```
+
+
 ### Installing R packages locally
+
+By default, the \proglang{R} module that is loaded only has the default packages that \proglang{R} comes with. If you wish to install additional packages to \proglang{R}, you will need to do that interactively by logging into either the login or visualisation nodes on Barkla and run \proglang{R} interactively. Once logged in you can open \proglang{R} by simply typing `R` and hitting 'Enter' in the MobaXterm terminal. You should then see the following.
+
+knitr::include_graphics("../Figures/Interactive_R.png")
+
+You can then install packages as you normally would in \proglang{R} on your local machine. The only difference is that you will need to specify the "mirror", or regional server where the package is downloaded from, and then when done with your \proglang{R} session, type `q()` to quit and return to the main HPC terminal. All installed packages will be put into a library in your home directory and will be sourced and available for all jobs, meaning that you _don't_ have to reinstall packages every time you log in.
+
 ## Jobs, Tasks, and Job Scheduling
 ### Job limits
 ## Partitions
