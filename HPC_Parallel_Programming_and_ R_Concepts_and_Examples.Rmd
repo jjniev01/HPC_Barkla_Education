@@ -236,11 +236,15 @@ Jobs are given to the HPC via a **job submission script**, written in \proglang{
 
 The main script, called by the job submission script and hereafter referred to as the **executable file**, for our examples will be written in \proglang{R}, but of course, can be written in others such as \proglang{Python} or \proglang{C}. Jobs can request whole nodes worth of resources, partial nodes of resources (thus allowing others to 'share' the remaining cores, with other users, that are not being used), as well as multiple nodes of resources.
 
-The resources of the HPC are shared amongst all of its users, but the number of users and the resources being used at any one time can be variable. As such
+The resources of the HPC are shared among all of its users, but the number of users and the resources being used at any one time can be variable. As such, the jobs submitted to be carried out by the HPC must be managed and orgnaised using a *job scheduler*. In many cases, including Barkla, this is done by a program called [Slurm](https://slurm.schedmd.com/documentation.html). Slurm schedules jobs in the *job queue* and processes them in an order based upon a combination of the amount of time and computational resources required. In general, the more time and computational resources requested, the longer the queue time will be. However, the queue time is most dependent upon existing demand for resources from other users and your previously submitted (and pending) jobs. 
 
-
+Slurm can be interfaced with directly utilising the MobaXterm terminal and a set of special commands. A quick cheatsheet of the Slurm commands can be found [here](https://slurm.schedmd.com/pdfs/summary.pdf) for reference.
 
 ### Job limits
+There are some limits on the time and computational resources that jobs can request as well as the number of jobs you can have running concurrently and the number of jobs you can have queued.
+
+Parallel jobs are carried out on one or more *dedicated* nodes, i.e. not shared with any other user/job, and serial jobs (or parallel *tasks*) on a given node are dependent only on the number of cores within the node. We are going to only focus on the 
+
 ## Partitions
 ## Acknowledging the HPC Team!
 
