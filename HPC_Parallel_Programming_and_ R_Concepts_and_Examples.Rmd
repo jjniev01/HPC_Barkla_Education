@@ -55,7 +55,9 @@ Last updated: 2021-10-01
 ## Purpose of the Text
 This text is meant to be a example-based primer for utilising R scripts within a High Performance Computing (HPC) environment in both "serial", i.e. one at a time, and "parallel", many at a time, computing tasks. While I focus here on the Barkla HPC at the University of Liverpool, a lot of the concepts and techniques are transferable to other Linux-based HPC ecosystems with a Slurm-based task manager. These examples and guidance are based upon my experiences using the IRIDIS 4 and IRIDIS 5 HPC systems at the University of Southampton; the SUMMIT HPC system at the University of Colorado, Boulder; and the Barkla HPC system at the University of Liverpool. I further focus on processing tasks that are CPU driven and do not address GPU driven processing, which is also possible on all of these, and most, HPC systems.
 
-This text is not meant to be a substitute for reading the user manual and guidance literature provided by the maintainers of the HPC system you are using! It is rather meant to be complementary, providing a more step by step exemplification and explanation of some of the more core types of operations and tasks that you might encounter while processing within an HPC system. The user manuals and guidance literature tend to have broader examples of some more specialised operations and scenarios as well as be more programming language agnostic; this text focuses only on using the R statistical programming language. While this broader overview is invaluable, its purpose does not allow for more in-depth examples and explanations that are contained here.
+This text is not meant to be a substitute for reading the user manual and guidance literature provided by the maintainers of the HPC system you are using! It is rather meant to be complementary, providing a more step by step exemplification and explanation of some of the more core types of operations and tasks that you might encounter while processing within an HPC system. The user manuals and guidance literature tend to have broader examples of some more specialised operations and scenarios as well as be more programming language agnostic; this text focuses only on using the R statistical programming language. While this broader overview is invaluable, its purpose does not allow for more in-depth examples and explanations that are contained here. Unless otherwise noted with in-text citation, the information in this text is largely based upon the excellent Barkla user manual:
+
+Addison, C. & M. Wang. 2021. "Some basic information on using the Barkla HPC cluster". *Advanced Research Computing, University of Liverpool*. Liverpool, UK.
 
 This text assumes that you have an intermediate knowledge of the R statistical programming language, access permissions to your relevant HPC system, and that HPC system is Linux-based and uses Slurm as its job scheduling manager. You also need to have an SSH client installed and either a direct ethernet cable into your university/HPC network, or have a VPN connection to your university/HPC network. Here, we utilise [MobaXterm](https://mobaxterm.mobatek.net/) as our GUI-based SSH client for ease of use, but technically you an utilise command line/ terminal SSH commands as well.
 
@@ -211,13 +213,20 @@ module load apps/R/3.6.3/gcc-5.5.0+lapack-3.5.0+blas-3.6.0
 
 ### Installing R packages locally
 
-By default, the \proglang{R} module that is loaded only has the default packages that \proglang{R} comes with. If you wish to install additional packages to \proglang{R}, you will need to do that interactively by logging into either the login or visualisation nodes on Barkla and run \proglang{R} interactively. Once logged in you can open \proglang{R} by simply typing `R` and hitting 'Enter' in the MobaXterm terminal. You should then see the following.
+By default, the \proglang{R} module that is loaded only has the default packages that \proglang{R} comes with. If you wish to install additional packages to \proglang{R}, you will need to do that interactively by logging into a visualisation nodes on Barkla, load a \proglang{R} module, and ,*typically* run \proglang{R} interactively. However, the first time you run R prior to installing packages, you will need to set up the envrionemnt variable `R_LIBS_USER` which specifies the location of \proglang{R} packages to be installed locally.
+
+`R_LIBS_USER` will, by default, be set to `$HOME/gridware/share/R/{version}` where version is typically `3.6.3` at the time of writing. This directory is subject to a space quota, so Barkla recommends setting it to an area in your volatile directory. This can be done by modifying your `~/.bashrc` file with the following line at the end of it:
+
+`export R_LIBS_USER=~/volatile/R_libs/3.6.3`
+
+You can then run \proglang{R} interactively by simply typing `R` and hitting 'Enter' in the MobaXterm terminal. You should then see the following.
 
 ```{r, echo = FALSE}
 knitr::include_graphics("../Figures/Interactive_R.png")
 ```
+Then, as stated in the Barkla manual:
 
-You can then install packages as you normally would in \proglang{R} on your local machine. The only difference is that you will need to specify the "mirror", or regional server where the package is downloaded from, and then when done with your \proglang{R} session, type `q()` to quit and return to the main HPC terminal. All installed packages will be put into a library in your home directory and will be sourced and available for all jobs, meaning that you _don't_ have to re-install packages every time you log in.
+>You can then install packages as you normally would in \proglang{R} on your local machine. The only difference is that you will need to specify the "mirror", or regional server where the package is downloaded from, and then when done with your \proglang{R} session, type `q()` to quit and return to the main HPC terminal. If the directory `~/volatile/R_libs/3.6.3/` doesn’t exist (this happens when you attempt to install a package for the first time), R will say it cannot install into the main area because it is not writable and then will ask if you want a personal library instead (say yes) and it will prompt to create the directory `~/volatile/R_libs/3.6.3/` as a personal library (say yes). All installed packages will be put into a library in your home directory and will be sourced and available for all jobs, meaning that you _don't_ have to re-install packages every time you log in.
 
 Lastly, when installing packages, keep an eye on the output in the MobaXterm terminal to see if the package installed correctly. If you see that it didn't, try to see why it may not have in order to figure out a solution. A lot of times, this is because of a dependency (such as \proglang{GEOS} or \proglang{GDAL} when trying to install \pkg{sf}) not being loaded within the HPC environment. Typically, you can discern which module/library/etc. is missing via a combination of the error messages and searching these messages on forums and message boards, e.g. StackOVerflow.
 
@@ -240,17 +249,48 @@ The resources of the HPC are shared among all of its users, but the number of us
 
 Slurm can be interfaced with directly utilising the MobaXterm terminal and a set of special commands. A quick cheatsheet of the Slurm commands can be found [here](https://slurm.schedmd.com/pdfs/summary.pdf) for reference.
 
-### Job limits
-There are some limits on the time and computational resources that jobs can request as well as the number of jobs you can have running concurrently and the number of jobs you can have queued.
+When a job is submitted to Slurm, it is given a job number, placed in the queue, and several base checks are carried out to make sure that the requested resources are available. When the job begins running, it is run on the first, possibly the only, core. This core sort of "coordinates" with any other cores and must be provided with information on environment variables, where the input and executable files are located, and where output files should be written. The default settings are that:
 
-Parallel jobs are carried out on one or more *dedicated* nodes, i.e. not shared with any other user/job, and serial jobs (or parallel *tasks*) on a given node are dependent only on the number of cores within the node. We are going to only focus on the 
+- the user's environment settings are in their `.bashrc` file
+- any relative directory path for files and executables are relative to the user's home directory
+- Standard output and error log files are directed to a file with the name `slurm-%j.out` and `slurm-%j.error`, where `%j` is replaced with the job number.
+
+
+### Job limits
+There are some limits on the time and computational resources that jobs can request as well as the number of jobs you can have running concurrently and the number of jobs you can have queued. At most, you can have 1000 jobs in the queue or running; any additional jobs submitted when this limit has been reached will result in an error. A way around this can be in how your group jobs and tasks, e.g. you could take 1000 1-minute jobs and regroup/code them to run as 10 100-minute jobs. Further, users are limited to using 400 CPUS cores at a given time. more CPU cores can be requested, but no additional jobs will run until the number being concurrently used by a given user drops below that threhold. This can be overridden by submitting a job with a "high" quality of serivce (QOS) option, i.e. `#SBATCH--qos=large` or `--qos=large`, attached to the job. Further details on QOS can be foudn in the Barkla User Guide.
+
+There are additional limits within Barkla, partially dependent upon which partition a node falls in, but we cover these in the [Partitions subsection](#Partitions).
+
+Parallel jobs are carried out on one or more *dedicated* nodes, i.e. not shared with any other user/job, and serial jobs (or parallel *tasks*) on a given node are dependent only on the number of cores within the node. We are going to focus primarily on the parallel type jobs with only some simple serial jobs covered as building blocks to better understand the parallel type jobs.
 
 ## Partitions
+In addition to different types of nodes, nodes can exist within different *partitions*, or groups of nodes, of the HPC system. These are described, along with resource limits, in the following table.
+
+```{r, echo = FALSE, results = "asis"}
+partitions_df <- data.frame("Partition Name"=c("lowpriority","cooper","krabbenhoft","langfeld","rosseinsky","thoefilis","troisi","soldini","schaich","nodes","long","himem","phi","gpu"),
+                            "Number of Nodes"=c(75,16,3,8,20,10,10,1,7,61,8,2,4,3),
+                            "Memory Avaialble (MB)"=c(rep("380000",11),"1100000","192000","380000+"),
+                            "Time Limit (D-HH:MM:SS)"=c("1-00:00:00","10-00:00:00","15-00:00:00",rep("5-00:00:00",6),"3-00:00:00","7-00:00:00","6-00:00:00","3-00:00:00","3-00:00:00"))
+kable(partitions_df, caption = "Table 1. Partitions in Barkla with characteristics")
+```
+
+Not all of these partitions are accessible by general users; some of the partitions are nodes and resources that were purchased by specific departments/projects/research groups. These restricted or dedicated partitions are: `cooper`, `krabbenhoft`, `langfeld`, `rosseinsky`, `theofilis`, `troisi`, `soldini`, and `schaich`. All users have access to the `nodes`, `long`, `himem`, `phi`, and `gpu/gpuc` partitions as well as the `lowpriority` partition. The default partition is `nodes`. The `long` partition is for jobs requiring up to (current limit) 7 days long. The `himem` partition consists of two nodes with 1.1 TB of RAM each, the `phi` node consists of four KNL Xeon Phi nodes, the `gpu` node contains three GPU nodes, and the `gpuc` partition contains two GPU nodes.
+
+The `lowpriority` partition is a bit special. Essentially, all of the dedicated nodes are also within the `lowpriority` partition and is set up so that unused dedicated resources might be utilised by other users when idle. However, if those resources become needed by the dedicated users who purchased the nodes, then your job on the `lowpriority` partition might be cancelled mid-job to prioritise the node owners. If this happens, the job will be restarted on other available nodes, if possible, or requeued or cancelled otherwise. More details on this, how to submit a job to a specific partition, and other related options are given in the Barkla User Guide.
+
+
 ## Acknowledging the HPC Team!
+All users of the ARC HPC facilities hosted at Liverpool should use the following text to name and acknowledge their use of the facilities in published works (including but not limited to papers, conference proceedings, presentations, posters, blog and other social media posts):
+
+"This work was undertaken on Barkla, part of the High Performance Computing facilities at the University of Liverpool, UK."
+
+Other HPC systems will likely have their own versions of this, but it takes a lot of hard work to keep these systems up and running, documentation current, and general daily support for researchers. So, give credit where credit is due!
 
 # Examples of Common Jobs on an HPC in R
 
 ---
+
+
 
 # Creating Basic HPC Job Submission Scripts
 
